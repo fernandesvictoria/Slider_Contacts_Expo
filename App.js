@@ -1,59 +1,97 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet } from 'react-native';
-import Slider from '@react-native-community/slider';
-import * as Contacts from 'expo-contacts';
+import React, { useState, useEffect } from "react";
+import { View, Text, FlatList, StyleSheet } from "react-native";
+import * as Contacts from "expo-contacts";
+import Slider from "@react-native-community/slider";
 
 export default function App() {
   const [contacts, setContacts] = useState([]);
-  const [filter, setFilter] = useState(50);
+  const [favorites, setFavorites] = useState({});
+  const [hasPermission, setHasPermission] = useState(null);
 
   useEffect(() => {
     (async () => {
       const { status } = await Contacts.requestPermissionsAsync();
-      if (status === 'granted') {
+      setHasPermission(status === "granted");
+
+      if (status === "granted") {
         const { data } = await Contacts.getContactsAsync({
           fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers],
         });
-        setContacts(data.map(contact => ({ ...contact, importance: 50 })));
+
+        if (data.length > 0) {
+          setContacts(data);
+        }
       }
     })();
   }, []);
 
-  const updateImportance = (id, value) => {
-    setContacts(contacts.map(contact => 
-      contact.id === id ? { ...contact, importance: value } : contact
-    ));
+  const toggleFavorite = (contactId) => {
+    setFavorites((prev) => {
+      if (prev[contactId]) {
+        const newFavs = { ...prev };
+        delete newFavs[contactId];
+        return newFavs;
+      } else {
+        return { ...prev, [contactId]: { level: 5 } };
+      }
+    });
   };
 
-  const filteredContacts = contacts.filter(c => c.importance >= filter);
+  const updateFriendLevel = (contactId, level) => {
+    setFavorites((prev) => ({
+      ...prev,
+      [contactId]: { ...prev[contactId], level },
+    }));
+  };
+
+  if (hasPermission === null) {
+    return (
+      <View style={styles.container}>
+        <Text>Solicitando permissão...</Text>
+      </View>
+    );
+  }
+
+  if (hasPermission === false) {
+    return (
+      <View style={styles.container}>
+        <Text>Permissão para acessar contatos negada</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      <Text>Filtrar contatos (≥ {filter}%):</Text>
-      <Slider
-        value={filter}
-        onValueChange={setFilter}
-        minimumValue={0}
-        maximumValue={100}
-        step={1}
-        minimumTrackTintColor="#007AFF" // iOS/Android
-        thumbTintColor="#007AFF"       // Android
-      />
+      <Text style={styles.title}>Meus Contatos</Text>
+
       <FlatList
-        data={filteredContacts}
-        keyExtractor={item => item.id}
+        data={contacts}
+        keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <View style={styles.contactCard}>
-            <Text style={styles.contactName}>{item.name}</Text>
-            <Text>{item.phoneNumbers?.[0]?.number || 'Sem telefone'}</Text>
-            <Slider
-              value={item.importance}
-              onValueChange={(value) => updateImportance(item.id, value)}
-              minimumValue={0}
-              maximumValue={100}
-              step={5}
-            />
-            <Text>Importância: {Math.round(item.importance)}%</Text>
+          <View style={styles.contactItem}>
+            <Text
+              style={styles.contactName}
+              onPress={() => toggleFavorite(item.id)}
+            >
+              {item.name} {favorites[item.id] ? "★" : "☆"}
+            </Text>
+
+            {favorites[item.id] && (
+              <View style={styles.sliderContainer}>
+                <Text>Nível de amizade: {favorites[item.id].level}</Text>
+                <Slider
+                  style={styles.slider}
+                  value={favorites[item.id].level}
+                  onValueChange={(value) => updateFriendLevel(item.id, value)}
+                  minimumValue={0}
+                  maximumValue={10}
+                  step={1}
+                  minimumTrackTintColor="#1fb28a"
+                  maximumTrackTintColor="#d3d3d3"
+                  thumbTintColor="#1a9274"
+                />
+              </View>
+            )}
           </View>
         )}
       />
@@ -62,7 +100,34 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  contactCard: { padding: 15, marginVertical: 8, backgroundColor: '#fff', borderRadius: 8 },
-  contactName: { fontWeight: 'bold' }
+  container: {
+    flex: 1,
+    padding: 20,
+    paddingTop: 50,
+    backgroundColor: "#f5f5f5",
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  contactItem: {
+    padding: 15,
+    marginBottom: 10,
+    backgroundColor: "white",
+    borderRadius: 8,
+    elevation: 2,
+  },
+  contactName: {
+    fontSize: 18,
+    fontWeight: "600",
+  },
+  sliderContainer: {
+    marginTop: 10,
+  },
+  slider: {
+    width: "100%",
+    height: 40,
+  },
 });
